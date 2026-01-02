@@ -1,7 +1,18 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { Video, Users, Brain, Trophy, FileText, Star, Mic, MicOff, VideoIcon, VideoOff, PhoneOff, MessageSquare, Upload, X, Play, Clock, Sparkles, Send, Bell, Check } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { Video, Users, Brain, Trophy, FileText, Star, Mic, MicOff, VideoOff, PhoneOff, MessageSquare, Upload, X, Play, Clock, Sparkles, Send, Bell, Check } from "lucide-react";
+import CategoryList from "@/components/browse/CategoryList";
+import SubjectList from "@/components/browse/SubjectList";
+import MentorList from "@/components/browse/MentorList";
+import { categories } from "@/lib/data";
+import { useAuth } from "@/lib/contexts/AuthContext";
+import { useRouter } from "next/navigation";
+import VideoRoom from "@/components/video/VideoRoom";
+import LectureList from '@/components/browse/LectureList';
+import ChatSidebar from "@/components/video/ChatSidebar";
+import { getGeminiResponse } from "@/app/actions/chat";
+import { Medal } from "lucide-react";
 
 interface Session {
   id: number;
@@ -20,6 +31,8 @@ interface Mentor {
   rating: number;
   sessions: number;
   avatar: string;
+  role?: string;
+  teachingHours: number;
 }
 
 interface ChatMessage {
@@ -27,6 +40,7 @@ interface ChatMessage {
   sender: string;
   message: string;
   type: "sent" | "received";
+  isAI?: boolean;
 }
 
 const features = [
@@ -69,14 +83,14 @@ const features = [
 ];
 
 const initialMentors: Mentor[] = [
-  { name: "Priya Sharma", subject: "Data Structures", rating: 4.9, sessions: 156, avatar: "PS" },
-  { name: "Rahul Verma", subject: "Mathematics", rating: 4.8, sessions: 142, avatar: "RV" },
-  { name: "Ananya Gupta", subject: "Physics", rating: 4.8, sessions: 128, avatar: "AG" },
-  { name: "Vikram Singh", subject: "Chemistry", rating: 4.7, sessions: 115, avatar: "VS" },
-  { name: "Sneha Reddy", subject: "Machine Learning", rating: 4.7, sessions: 98, avatar: "SR" },
-  { name: "Amit Patel", subject: "Algorithms", rating: 4.6, sessions: 87, avatar: "AP" },
-  { name: "Neha Kapoor", subject: "DBMS", rating: 4.6, sessions: 82, avatar: "NK" },
-  { name: "Karan Mehta", subject: "Operating Systems", rating: 4.5, sessions: 76, avatar: "KM" },
+  { name: "Priya Sharma", subject: "Data Structures", rating: 4.9, sessions: 156, avatar: "PS", teachingHours: 15 },
+  { name: "Rahul Verma", subject: "Mathematics", rating: 4.8, sessions: 142, avatar: "RV", teachingHours: 12 },
+  { name: "Ananya Gupta", subject: "Physics", rating: 4.8, sessions: 128, avatar: "AG", teachingHours: 11 },
+  { name: "Vikram Singh", subject: "Chemistry", rating: 4.7, sessions: 115, avatar: "VS", teachingHours: 9 },
+  { name: "Sneha Reddy", subject: "Machine Learning", rating: 4.7, sessions: 98, avatar: "SR", teachingHours: 8 },
+  { name: "Amit Patel", subject: "Algorithms", rating: 4.6, sessions: 87, avatar: "AP", teachingHours: 6 },
+  { name: "Neha Kapoor", subject: "DBMS", rating: 4.6, sessions: 82, avatar: "NK", teachingHours: 4 },
+  { name: "Karan Mehta", subject: "Operating Systems", rating: 4.5, sessions: 76, avatar: "KM", teachingHours: 2 },
 ];
 
 const initialSessions: Session[] = [
@@ -89,8 +103,41 @@ const initialSessions: Session[] = [
 ];
 
 export default function Home() {
+  const { user, loading, logout } = useAuth();
+  const router = useRouter();
+
   const [activeTab, setActiveTab] = useState<"home" | "sessions" | "room" | "leaderboard" | "pdf">("home");
+  const [browsingCategory, setBrowsingCategory] = useState<string | null>(null);
+  const [browsingSubject, setBrowsingSubject] = useState<string | null>(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
   const [sessionFilter, setSessionFilter] = useState<"all" | "live" | "upcoming">("all");
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, router]);
+
+  // Listen for mentor selection events from subcomponents (e.g., MentorList)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      try {
+        // @ts-ignore
+        const m = e?.detail;
+        if (m) {
+          setSelectedMentor(m);
+          setShowMentorModal(true);
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+
+    window.addEventListener('orchids-select-mentor', handler as EventListener);
+    return () => window.removeEventListener('orchids-select-mentor', handler as EventListener);
+  }, []);
+
   const [leaderboardFilter, setLeaderboardFilter] = useState<"week" | "month" | "all">("week");
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [showCreateSessionModal, setShowCreateSessionModal] = useState(false);
@@ -113,6 +160,7 @@ export default function Home() {
     { id: 1, sender: "Priya Sharma", message: "Welcome everyone! Let's start with the basics of BST.", type: "received" },
     { id: 2, sender: "Raj Kumar", message: "Thanks for the session! Quick question about insertion.", type: "received" },
   ]);
+  const [chatLoading, setChatLoading] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [newSessionForm, setNewSessionForm] = useState({
     title: "",
@@ -127,8 +175,11 @@ export default function Home() {
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+
+
+
   const simulateAINotes = () => {
-    const notes = currentSession?.subject === "Mathematics" 
+    const notes = currentSession?.subject === "Mathematics"
       ? `<h4>Session Summary: Integration Techniques</h4>
       <ul>
         <li><strong>Basic Integration:</strong> Antiderivatives and the constant of integration.</li>
@@ -199,27 +250,55 @@ The document includes 15 practice problems and 5 real-world examples for better 
     setFeedbackForm({ clarity: "", learned: "", suggestions: "" });
   };
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      setChatMessages([...chatMessages, {
-        id: chatMessages.length + 1,
+  const handleSendMessage = async (msg: string) => {
+    if (msg.trim()) {
+      // Add user message immediately
+      const userMsgId = chatMessages.length + 1;
+      const newHistory = [...chatMessages, {
+        id: userMsgId,
         sender: "You",
-        message: newMessage,
-        type: "sent"
-      }]);
-      setNewMessage("");
-      setTimeout(() => {
+        message: msg,
+        type: "sent" as const
+      }];
+      setChatMessages(newHistory);
+      setChatLoading(true);
+
+      try {
+        // Convert internal message format to Gemini history format
+        // Use the updated history (including the just-sent user message)
+        const history = newHistory.map(m => ({
+          role: m.sender === "You" ? "user" : "model" as "user" | "model",
+          parts: m.message
+        }));
+
+        // Call Server Action
+        const aiResponse = await getGeminiResponse(history, msg);
+
+        // Add AI response
         setChatMessages(prev => [...prev, {
           id: prev.length + 1,
-          sender: currentSession?.mentor || "Mentor",
-          message: "Great question! Let me explain that...",
+          sender: "Gemini AI",
+          message: aiResponse,
+          type: "received",
+          isAI: true
+        }]);
+
+      } catch (err) {
+        console.error("Chat Error", err);
+        setChatMessages(prev => [...prev, {
+          id: prev.length + 1,
+          sender: "System",
+          message: "Failed to get AI response. Please check your connection.",
           type: "received"
         }]);
-      }, 1500);
+      } finally {
+        setChatLoading(false);
+      }
     }
   };
 
   const handleCreateSession = () => {
+    if (!user) return;
     if (newSessionForm.title && newSessionForm.subject) {
       setSessionCreated(true);
       setTimeout(() => {
@@ -229,7 +308,7 @@ The document includes 15 practice problems and 5 real-world examples for better 
           setCurrentSession({
             id: Date.now(),
             title: newSessionForm.title,
-            mentor: "You",
+            mentor: user.displayName || "You",
             subject: newSessionForm.subject,
             viewers: 0,
             status: "live",
@@ -270,10 +349,19 @@ The document includes 15 practice problems and 5 real-world examples for better 
     setActiveTab(action as typeof activeTab);
   };
 
+  const handleSelectCategory = (categoryId: string) => {
+    setBrowsingCategory(categoryId);
+    setActiveTab("sessions");
+  };
+
   const filteredSessions = initialSessions.filter(session => {
     if (sessionFilter === "all") return true;
     return session.status === sessionFilter;
   });
+
+  const matchedSessions = browsingSubject && typeof browsingSubject === 'string'
+    ? initialSessions.filter(s => s.subject === browsingSubject || s.subject.includes(browsingSubject) || browsingSubject.includes(s.subject))
+    : [];
 
   const renderStars = (count: number, interactive = false, onRate?: (n: number) => void) => {
     return Array(5).fill(0).map((_, i) => (
@@ -289,6 +377,14 @@ The document includes 15 practice problems and 5 real-world examples for better 
     ));
   };
 
+  if (loading) return (
+    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+      <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+    </div>
+  );
+
+  if (!user) return null;
+
   return (
     <div className="peer-learn-container">
       <header className="nav-header">
@@ -296,13 +392,64 @@ The document includes 15 practice problems and 5 real-world examples for better 
           <div className="logo" onClick={() => setActiveTab("home")}>PeerLearn</div>
           <ul className="nav-links">
             <li><button className={activeTab === "home" ? "active" : ""} onClick={() => setActiveTab("home")}>Home</button></li>
-            <li><button className={activeTab === "sessions" ? "active" : ""} onClick={() => setActiveTab("sessions")}>Sessions</button></li>
+            <li><button className={activeTab === "sessions" ? "active" : ""} onClick={() => { setActiveTab("sessions"); setBrowsingCategory(null); }}>Browse</button></li>
             <li><button className={activeTab === "leaderboard" ? "active" : ""} onClick={() => setActiveTab("leaderboard")}>Leaderboard</button></li>
             <li><button className={activeTab === "pdf" ? "active" : ""} onClick={() => setActiveTab("pdf")}>PDF Summary</button></li>
           </ul>
           <div className="nav-buttons">
+            <div className="relative">
+              <div
+                className="flex items-center gap-3 mr-4 cursor-pointer hover:bg-white/5 p-2 rounded-lg transition-colors"
+                onClick={() => setShowUserMenu(!showUserMenu)}
+              >
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                    {user.displayName ? user.displayName[0] : "U"}
+                  </div>
+                )}
+                <span className="text-sm font-medium hidden md:block">{user.displayName?.split(' ')[0]}</span>
+              </div>
+
+              {showUserMenu && (
+                <div className="absolute right-0 top-full mt-3 w-64 bg-[#0F0F16]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 ring-1 ring-white/5">
+                  <div className="p-4 border-b border-white/5 bg-gradient-to-r from-indigo-500/10 to-purple-500/10">
+                    <p className="font-semibold text-sm text-white">{user.displayName}</p>
+                    <p className="text-xs text-indigo-200/70 truncate mt-0.5">{user.email}</p>
+                  </div>
+                  <div className="p-2 space-y-1">
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted rounded-lg transition-colors flex items-center gap-2"
+                      onClick={() => {
+                        handleMentorClick({
+                          name: user.displayName || "You",
+                          role: "Student",
+                          rating: 5.0,
+                          sessions: 0,
+                          avatar: user.photoURL || (user.displayName ? user.displayName[0] : "U"),
+                          subject: "Learning",
+                          teachingHours: 0
+                        });
+                        setShowUserMenu(false);
+                      }}
+                    >
+                      <Users size={14} /> Profile
+                    </button>
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted rounded-lg transition-colors text-red-400 hover:text-red-300 flex items-center gap-2"
+                      onClick={() => {
+                        logout();
+                        setShowUserMenu(false);
+                      }}
+                    >
+                      <PhoneOff size={14} className="rotate-45" /> Logout
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
             <button className="btn btn-secondary" onClick={() => setShowCreateSessionModal(true)}>Become a Mentor</button>
-            <button className="btn btn-primary" onClick={() => setActiveTab("sessions")}>Start Learning</button>
           </div>
         </div>
       </header>
@@ -318,8 +465,8 @@ The document includes 15 practice problems and 5 real-world examples for better 
                 Live Sessions Available Now
               </div>
               <h1 className="hero-title">
-                Learn from Your Peers,<br />
-                <span className="hero-title-gradient">Teach What You Know</span>
+                Welcome back, {user.displayName?.split(' ')[0]}!<br />
+                <span className="hero-title-gradient">Ready to Learn?</span>
               </h1>
               <p className="hero-subtitle">
                 Connect with fellow students for personalized, face-to-face video learning sessions. Understand complex topics easily with peer explanations.
@@ -370,6 +517,14 @@ The document includes 15 practice problems and 5 real-world examples for better 
 
           <section className="section">
             <div className="section-header">
+              <h2 className="section-title">Browse by Category</h2>
+              <p className="section-subtitle">Find the perfect mentor in your field of study</p>
+            </div>
+            <CategoryList onSelectCategory={handleSelectCategory} />
+          </section>
+
+          <section className="section">
+            <div className="section-header">
               <h2 className="section-title">Live & Upcoming Sessions</h2>
               <p className="section-subtitle">Jump into a session now or schedule one for later</p>
             </div>
@@ -401,7 +556,7 @@ The document includes 15 practice problems and 5 real-world examples for better 
                       <Clock size={14} />
                       {session.status === "live" ? "Started 15 mins ago" : session.time}
                     </span>
-                    <button 
+                    <button
                       className={`btn ${session.status === "live" ? "btn-primary" : "btn-warning"} btn-small`}
                       onClick={() => session.status === "live" ? handleJoinSession(session) : handleSetReminder(session)}
                     >
@@ -415,6 +570,9 @@ The document includes 15 practice problems and 5 real-world examples for better 
               <button className="btn btn-outline" onClick={() => setActiveTab("sessions")}>
                 View All Sessions
               </button>
+            </div>
+            <div className="mt-8">
+              <MentorList />
             </div>
           </section>
 
@@ -432,7 +590,19 @@ The document includes 15 practice problems and 5 real-world examples for better 
                     </div>
                     <div className="leaderboard-avatar">{mentor.avatar}</div>
                     <div className="leaderboard-info">
-                      <div className="leaderboard-name">{mentor.name}</div>
+                      <div className="leaderboard-name flex items-center gap-1">
+                        {mentor.name}
+                        {mentor.teachingHours >= 10 && (
+                          <div className="bg-yellow-500/20 p-0.5 rounded ml-1" title="Gold Mentor (10+ Hours)">
+                            <Medal size={14} className="text-yellow-500" />
+                          </div>
+                        )}
+                        {mentor.teachingHours >= 5 && mentor.teachingHours < 10 && (
+                          <div className="bg-slate-400/20 p-0.5 rounded ml-1" title="Silver Mentor (5+ Hours)">
+                            <Medal size={14} className="text-slate-400" />
+                          </div>
+                        )}
+                      </div>
                       <div className="leaderboard-subject">{mentor.subject}</div>
                     </div>
                     <div className="leaderboard-stats">
@@ -460,53 +630,159 @@ The document includes 15 practice problems and 5 real-world examples for better 
 
       {activeTab === "sessions" && (
         <section className="section" style={{ paddingTop: "8rem" }}>
-          <div style={{ marginBottom: "2rem" }}>
-            <h1 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: "0.5rem" }}>Browse Sessions</h1>
-            <p style={{ color: "var(--muted-foreground)" }}>Find sessions that match your learning needs</p>
-          </div>
-          <div className="tabs">
-            <button className={`tab-btn ${sessionFilter === "all" ? "active" : ""}`} onClick={() => setSessionFilter("all")}>All Sessions</button>
-            <button className={`tab-btn ${sessionFilter === "live" ? "active" : ""}`} onClick={() => setSessionFilter("live")}>Live Now</button>
-            <button className={`tab-btn ${sessionFilter === "upcoming" ? "active" : ""}`} onClick={() => setSessionFilter("upcoming")}>Upcoming</button>
-          </div>
-          <div className="sessions-grid">
-            {filteredSessions.map((session) => (
-              <div key={session.id} className="session-card">
-                <div className="session-header">
-                  <span className="session-subject">{session.subject}</span>
-                  <span className={`session-status ${session.status}`}>
-                    <span className="room-status-dot"></span>
-                    {session.status === "live" ? `${session.viewers} watching` : session.time}
-                  </span>
-                </div>
-                <h3 className="session-title">{session.title}</h3>
-                <div className="session-mentor">
-                  <div className="session-mentor-avatar">{session.mentor.split(" ").map(n => n[0]).join("")}</div>
-                  <div>
-                    <div className="session-mentor-name">{session.mentor}</div>
-                    <div className="session-mentor-rating">
-                      <div className="star-rating" style={{ display: "inline-flex", marginRight: 4 }}>
-                        {renderStars(Math.round(session.rating))}
+          {!browsingCategory ? (
+            <>
+              <div style={{ marginBottom: "2rem" }}>
+                <h1 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: "0.5rem" }}>Explore Subjects</h1>
+                <p style={{ color: "var(--muted-foreground)" }}>Select a category to find specific topics and mentors.</p>
+              </div>
+              <CategoryList onSelectCategory={handleSelectCategory} />
+
+              <div style={{ marginTop: "4rem", marginBottom: "2rem" }}>
+                <h2 className="text-2xl font-bold">Trending Sessions</h2>
+              </div>
+              <div className="sessions-grid">
+                {filteredSessions.slice(0, 3).map((session) => (
+                  <div key={session.id} className="session-card">
+                    <div className="session-header">
+                      <span className="session-subject">{session.subject}</span>
+                      <span className={`session-status ${session.status}`}>
+                        <span className="room-status-dot"></span>
+                        {session.status === "live" ? `${session.viewers} watching` : session.time}
+                      </span>
+                    </div>
+                    <h3 className="session-title">{session.title}</h3>
+                    <div className="session-mentor">
+                      <div className="session-mentor-avatar">{session.mentor.split(" ").map(n => n[0]).join("")}</div>
+                      <div>
+                        <div className="session-mentor-name">{session.mentor}</div>
+                        <div className="session-mentor-rating">
+                          <div className="star-rating" style={{ display: "inline-flex", marginRight: 4 }}>
+                            {renderStars(Math.round(session.rating))}
+                          </div>
+                          {session.rating}
+                        </div>
                       </div>
-                      {session.rating}
+                    </div>
+                    <div className="session-footer">
+                      <span className="session-time">
+                        <Clock size={14} />
+                        {session.status === "live" ? "Started 15 mins ago" : session.time}
+                      </span>
+                      <button
+                        className={`btn ${session.status === "live" ? "btn-primary" : "btn-warning"} btn-small`}
+                        onClick={() => session.status === "live" ? handleJoinSession(session) : handleSetReminder(session)}
+                      >
+                        {session.status === "live" ? "Join Now" : "Set Reminder"}
+                      </button>
                     </div>
                   </div>
-                </div>
-                <div className="session-footer">
-                  <span className="session-time">
-                    <Clock size={14} />
-                    {session.status === "live" ? "Started 15 mins ago" : session.time}
-                  </span>
-                  <button 
-                    className={`btn ${session.status === "live" ? "btn-primary" : "btn-warning"} btn-small`}
-                    onClick={() => session.status === "live" ? handleJoinSession(session) : handleSetReminder(session)}
-                  >
-                    {session.status === "live" ? "Join Now" : "Set Reminder"}
-                  </button>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          ) : !browsingSubject ? (
+            <SubjectList
+              categoryId={browsingCategory}
+              onBack={() => { setBrowsingCategory(null); setBrowsingSubject(null); }}
+              onSelectSubject={(subject) => setBrowsingSubject(subject)}
+            />
+          ) : (
+            <div>
+              <div className="mb-6">
+                <button
+                  onClick={() => setBrowsingSubject(null)}
+                  className="text-sm text-muted-foreground hover:text-foreground mb-4"
+                >
+                  ← Back to Subjects
+                </button>
+                <h2 className="text-2xl font-bold">{browsingSubject}</h2>
+                <p className="text-muted-foreground">Available sessions and mentors for {browsingSubject}</p>
+                {/* Show subject topics and mentors from static data when available */}
+                {(() => {
+                  const cat = categories.find(c => c.subjects.some(s => s.name === browsingSubject));
+                  const subj = cat?.subjects.find(s => s.name === browsingSubject);
+                  return subj ? (
+                    <div className="mt-3 text-sm text-muted-foreground">
+                      {subj.topics && <div><strong>Topics:</strong> {subj.topics.join(', ')}</div>}
+                      {subj.mentors && subj.mentors.length > 0 && (
+                        <div className="mt-2">
+                          <strong>Mentors:</strong>
+                          <div className="flex gap-3 mt-2">
+                            {subj.mentors.map((m: any, i: number) => (
+                              <div key={i} className="p-3 rounded-lg bg-card border text-sm">
+                                <div className="font-semibold">{m.name}</div>
+                                <div className="text-xs text-muted-foreground">Rating: {m.rating}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+
+              <div className="sessions-grid">
+                {matchedSessions.length > 0 ? (
+                  matchedSessions.map((session) => (
+                    <div key={session.id} className="session-card">
+                      <div className="session-header">
+                        <span className="session-subject">{session.subject}</span>
+                        <span className={`session-status ${session.status}`}>
+                          <span className="room-status-dot"></span>
+                          {session.status === "live" ? `${session.viewers} watching` : session.time}
+                        </span>
+                      </div>
+                      <h3 className="session-title">{session.title}</h3>
+                      <div className="session-mentor" onClick={(e) => {
+                        e.stopPropagation();
+                        const mentorObj = initialMentors.find(m => m.name === session.mentor) || {
+                          name: session.mentor,
+                          role: "Mentor",
+                          rating: session.rating,
+                          sessions: 15,
+                          avatar: session.mentor.split(" ").map(n => n[0]).join(""),
+                          subject: session.subject,
+                          teachingHours: 12
+                        };
+                        handleMentorClick(mentorObj);
+                      }} style={{ cursor: "pointer" }}>
+                        <div className="session-mentor-avatar">{session.mentor.split(" ").map(n => n[0]).join("")}</div>
+                        <div>
+                          <div className="session-mentor-name">{session.mentor}</div>
+                          <div className="session-mentor-rating">
+                            <div className="star-rating" style={{ display: "inline-flex", marginRight: 4 }}>
+                              {renderStars(Math.round(session.rating))}
+                            </div>
+                            {session.rating}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="session-footer">
+                        <span className="session-time">
+                          <Clock size={14} />
+                          {session.status === "live" ? "Started 15 mins ago" : session.time}
+                        </span>
+                        <button
+                          className={`btn ${session.status === "live" ? "btn-primary" : "btn-warning"} btn-small`}
+                          onClick={() => session.status === "live" ? handleJoinSession(session) : handleSetReminder(session)}
+                        >
+                          {session.status === "live" ? "Join Now" : "Set Reminder"}
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="col-span-full text-center py-12">
+                    <p className="text-muted-foreground">No active sessions found for {browsingSubject}.</p>
+                    <button className="btn btn-primary mt-4" onClick={() => setShowCreateSessionModal(true)}>
+                      Be the first mentor!
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </section>
       )}
 
@@ -536,81 +812,24 @@ The document includes 15 practice problems and 5 real-world examples for better 
                 </div>
               )}
             </div>
-            
-            {inCall ? (
-              <>
-                <div className="video-grid">
-                  <div className="video-main">
-                    <div className="video-placeholder">{currentSession?.mentor.split(" ").map(n => n[0]).join("") || "M"}</div>
-                    <div className="video-name">{currentSession?.mentor || "Mentor"}</div>
-                    <div className="video-role">Mentor</div>
-                  </div>
-                  <div className="video-sidebar">
-                    <div className="video-small">
-                      <div className="video-placeholder">You</div>
-                      <div className="video-name">You</div>
-                    </div>
-                    <div className="video-small">
-                      <div className="video-placeholder">RK</div>
-                      <div className="video-name">Raj Kumar</div>
-                    </div>
-                  </div>
-                </div>
 
-                {showChat && (
-                  <div className="chat-panel">
-                    <div className="chat-header">Session Chat</div>
-                    <div className="chat-messages">
-                      {chatMessages.map((msg) => (
-                        <div key={msg.id} className={`chat-message ${msg.type}`}>
-                          {msg.type === "received" && <div className="sender">{msg.sender}</div>}
-                          {msg.message}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="chat-input-container">
-                      <input
-                        type="text"
-                        className="chat-input"
-                        placeholder="Type a message..."
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-                      />
-                      <button className="chat-send-btn" onClick={handleSendMessage}>
-                        <Send size={18} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="video-controls">
-                  <button 
-                    className={`control-btn ${micOn ? "control-btn-default" : "control-btn-danger"}`}
-                    onClick={() => setMicOn(!micOn)}
-                    title={micOn ? "Mute" : "Unmute"}
-                  >
-                    {micOn ? <Mic size={20} /> : <MicOff size={20} />}
-                  </button>
-                  <button 
-                    className={`control-btn ${videoOn ? "control-btn-default" : "control-btn-danger"}`}
-                    onClick={() => setVideoOn(!videoOn)}
-                    title={videoOn ? "Turn off camera" : "Turn on camera"}
-                  >
-                    {videoOn ? <VideoIcon size={20} /> : <VideoOff size={20} />}
-                  </button>
-                  <button 
-                    className={`control-btn ${showChat ? "control-btn-active" : "control-btn-default"}`}
-                    onClick={() => setShowChat(!showChat)}
-                    title="Toggle chat"
-                  >
-                    <MessageSquare size={20} />
-                  </button>
-                  <button className="control-btn control-btn-danger" onClick={handleEndCall} title="End call">
-                    <PhoneOff size={20} />
-                  </button>
+            {inCall && currentSession ? (
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 h-[600px]">
+                <div className="lg:col-span-3 h-full">
+                  <VideoRoom
+                    roomId={currentSession.id.toString()}
+                    isHost={currentSession.mentor === (user?.displayName || "You")}
+                    onEndCall={handleEndCall}
+                  />
                 </div>
-              </>
+                <div className="lg:col-span-1 h-full">
+                  <ChatSidebar
+                    messages={chatMessages}
+                    onSendMessage={handleSendMessage}
+                    loading={chatLoading}
+                  />
+                </div>
+              </div>
             ) : (
               <div className="empty-state" style={{ padding: "4rem" }}>
                 <div className="empty-state-icon">
@@ -624,7 +843,7 @@ The document includes 15 practice problems and 5 real-world examples for better 
               </div>
             )}
           </div>
-          
+
           {aiNotes && (
             <div className="ai-notes-panel">
               <div className="ai-notes-header">
@@ -658,7 +877,19 @@ The document includes 15 practice problems and 5 real-world examples for better 
                   </div>
                   <div className="leaderboard-avatar">{mentor.avatar}</div>
                   <div className="leaderboard-info">
-                    <div className="leaderboard-name">{mentor.name}</div>
+                    <div className="leaderboard-name flex items-center gap-1">
+                      {mentor.name}
+                      {mentor.teachingHours >= 10 && (
+                        <div className="bg-yellow-500/20 p-0.5 rounded ml-1" title="Gold Mentor (10+ Hours)">
+                          <Medal size={14} className="text-yellow-500" />
+                        </div>
+                      )}
+                      {mentor.teachingHours >= 5 && mentor.teachingHours < 10 && (
+                        <div className="bg-slate-400/20 p-0.5 rounded ml-1" title="Silver Mentor (5+ Hours)">
+                          <Medal size={14} className="text-slate-400" />
+                        </div>
+                      )}
+                    </div>
                     <div className="leaderboard-subject">{mentor.subject}</div>
                   </div>
                   <div className="leaderboard-stats">
@@ -685,14 +916,14 @@ The document includes 15 practice problems and 5 real-world examples for better 
             <p style={{ color: "var(--muted-foreground)" }}>Upload your study materials and get AI-powered simple explanations</p>
           </div>
           <div className="pdf-upload-section">
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              accept=".pdf" 
-              onChange={handleFileUpload} 
-              style={{ display: "none" }} 
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".pdf"
+              onChange={handleFileUpload}
+              style={{ display: "none" }}
             />
-            <div 
+            <div
               className={`upload-zone ${pdfFile ? "has-file" : ""}`}
               onClick={() => fileInputRef.current?.click()}
             >
@@ -706,7 +937,7 @@ The document includes 15 practice problems and 5 real-world examples for better 
                 {pdfFile ? "Click to upload a different file" : "Supports PDF files up to 10MB"}
               </p>
             </div>
-            
+
             {pdfSummary && (
               <div className="pdf-summary">
                 <h4>
@@ -747,10 +978,10 @@ The document includes 15 practice problems and 5 real-world examples for better 
                   </div>
                   <div className="feedback-question">
                     <label>Was the explanation clear and easy to understand?</label>
-                    <select 
+                    <select
                       className="form-select"
                       value={feedbackForm.clarity}
-                      onChange={(e) => setFeedbackForm({...feedbackForm, clarity: e.target.value})}
+                      onChange={(e) => setFeedbackForm({ ...feedbackForm, clarity: e.target.value })}
                     >
                       <option value="">Select an option</option>
                       <option value="very">Very clear</option>
@@ -760,22 +991,22 @@ The document includes 15 practice problems and 5 real-world examples for better 
                   </div>
                   <div className="feedback-question">
                     <label>What did you learn from this session?</label>
-                    <textarea 
-                      className="feedback-input" 
-                      rows={3} 
+                    <textarea
+                      className="feedback-input"
+                      rows={3}
                       placeholder="Share what you learned..."
                       value={feedbackForm.learned}
-                      onChange={(e) => setFeedbackForm({...feedbackForm, learned: e.target.value})}
+                      onChange={(e) => setFeedbackForm({ ...feedbackForm, learned: e.target.value })}
                     />
                   </div>
                   <div className="feedback-question">
                     <label>Any suggestions for improvement?</label>
-                    <textarea 
-                      className="feedback-input" 
-                      rows={3} 
+                    <textarea
+                      className="feedback-input"
+                      rows={3}
                       placeholder="Help the mentor improve..."
                       value={feedbackForm.suggestions}
-                      onChange={(e) => setFeedbackForm({...feedbackForm, suggestions: e.target.value})}
+                      onChange={(e) => setFeedbackForm({ ...feedbackForm, suggestions: e.target.value })}
                     />
                   </div>
                 </div>
@@ -814,20 +1045,20 @@ The document includes 15 practice problems and 5 real-world examples for better 
                 <>
                   <div className="form-group">
                     <label className="form-label">Session Title</label>
-                    <input 
-                      type="text" 
-                      className="form-input" 
+                    <input
+                      type="text"
+                      className="form-input"
                       placeholder="e.g., Understanding Recursion Made Simple"
                       value={newSessionForm.title}
-                      onChange={(e) => setNewSessionForm({...newSessionForm, title: e.target.value})}
+                      onChange={(e) => setNewSessionForm({ ...newSessionForm, title: e.target.value })}
                     />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Subject</label>
-                    <select 
+                    <select
                       className="form-select"
                       value={newSessionForm.subject}
-                      onChange={(e) => setNewSessionForm({...newSessionForm, subject: e.target.value})}
+                      onChange={(e) => setNewSessionForm({ ...newSessionForm, subject: e.target.value })}
                     >
                       <option value="">Select a subject</option>
                       <option value="DSA">Data Structures & Algorithms</option>
@@ -841,96 +1072,146 @@ The document includes 15 practice problems and 5 real-world examples for better 
                   </div>
                   <div className="form-group">
                     <label className="form-label">Description</label>
-                    <textarea 
-                      className="form-textarea" 
+                    <textarea
+                      className="form-textarea"
                       rows={3}
                       placeholder="Describe what you'll be teaching..."
                       value={newSessionForm.description}
-                      onChange={(e) => setNewSessionForm({...newSessionForm, description: e.target.value})}
+                      onChange={(e) => setNewSessionForm({ ...newSessionForm, description: e.target.value })}
                     />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Schedule</label>
-                    <select 
+                    <select
                       className="form-select"
                       value={newSessionForm.schedule}
-                      onChange={(e) => setNewSessionForm({...newSessionForm, schedule: e.target.value})}
+                      onChange={(e) => setNewSessionForm({ ...newSessionForm, schedule: e.target.value })}
                     >
                       <option value="now">Start Now (Live)</option>
                       <option value="later">Schedule for Later</option>
                     </select>
                   </div>
+                  <div className="modal-footer">
+                    <button className="btn btn-secondary" onClick={() => setShowCreateSessionModal(false)}>
+                      Cancel
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleCreateSession}
+                      disabled={!newSessionForm.title || !newSessionForm.subject}
+                    >
+                      {newSessionForm.schedule === "now" ? "Start Session" : "Schedule Session"}
+                    </button>
+                  </div>
                 </>
               )}
             </div>
-            {!sessionCreated && (
-              <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setShowCreateSessionModal(false)}>
-                  Cancel
-                </button>
-                <button 
-                  className="btn btn-primary" 
-                  onClick={handleCreateSession}
-                  disabled={!newSessionForm.title || !newSessionForm.subject}
-                >
-                  {newSessionForm.schedule === "now" ? "Start Session" : "Schedule Session"}
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}
 
       {showMentorModal && selectedMentor && (
         <div className="modal-overlay" onClick={() => setShowMentorModal(false)}>
-          <div className="modal-content mentor-profile-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">Mentor Profile</h2>
-              <button className="modal-close" onClick={() => setShowMentorModal(false)}>
+          <div className="modal-content relative overflow-hidden" onClick={e => e.stopPropagation()}>
+            {/* Background gradient for profile header */}
+            <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent" />
+
+            <div className="modal-header relative z-10 pt-4">
+              <button className="modal-close bg-black/20 hover:bg-black/40 text-white rounded-full p-1" onClick={() => setShowMentorModal(false)}>
                 <X size={20} />
               </button>
             </div>
-            <div className="modal-body">
-              <div className="mentor-profile-header">
-                <div className="mentor-profile-avatar">{selectedMentor.avatar}</div>
-                <div className="mentor-profile-info">
-                  <h3>{selectedMentor.name}</h3>
-                  <p>{selectedMentor.subject} Expert</p>
+
+            <div className="modal-body relative z-10" style={{ marginTop: "-1rem" }}>
+              <div className="flex flex-col items-center">
+                <div className="w-24 h-24 rounded-full bg-secondary border-4 border-card shadow-xl flex items-center justify-center text-3xl font-bold mb-4">
+                  {selectedMentor.avatar.includes("/") ? (
+                    <img src={selectedMentor.avatar} alt="Avatar" className="w-full h-full rounded-full object-cover" />
+                  ) : (
+                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
+                      {selectedMentor.avatar}
+                    </span>
+                  )}
+                </div>
+
+                <h2 className="text-2xl font-bold mb-1 flex items-center gap-2">
+                  {selectedMentor.name}
+                  {selectedMentor.teachingHours >= 10 && (
+                    <span className="bg-yellow-500/20 text-yellow-500 text-xs px-2 py-0.5 rounded-full border border-yellow-500/30 flex items-center gap-1">
+                      <Medal size={12} /> Gold Mentor
+                    </span>
+                  )}
+                  {selectedMentor.teachingHours >= 5 && selectedMentor.teachingHours < 10 && (
+                    <span className="bg-slate-400/20 text-slate-400 text-xs px-2 py-0.5 rounded-full border border-slate-400/30 flex items-center gap-1">
+                      <Medal size={12} /> Silver Mentor
+                    </span>
+                  )}
+                </h2>
+                <p className="text-primary font-medium mb-1">{selectedMentor.subject} Expert</p>
+                <div className="flex items-center gap-1 bg-yellow-500/10 px-3 py-1 rounded-full border border-yellow-500/20">
+                  <Star size={14} fill="#eab308" className="text-yellow-500" />
+                  <span className="text-yellow-500 text-sm font-bold">{selectedMentor.rating}</span>
                 </div>
               </div>
-              <div className="mentor-profile-stats">
-                <div className="mentor-profile-stat">
-                  <div className="mentor-profile-stat-value">{selectedMentor.sessions}</div>
-                  <div className="mentor-profile-stat-label">Sessions</div>
+
+              <div className="grid grid-cols-3 gap-4 my-8">
+                <div className="text-center p-4 bg-secondary/50 rounded-2xl border border-white/5">
+                  <div className="text-2xl font-mono font-bold">{selectedMentor.sessions}</div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Sessions</div>
                 </div>
-                <div className="mentor-profile-stat">
-                  <div className="mentor-profile-stat-value">{selectedMentor.rating}</div>
-                  <div className="mentor-profile-stat-label">Rating</div>
+                <div className="text-center p-4 bg-secondary/50 rounded-2xl border border-white/5">
+                  <div className="text-2xl font-mono font-bold">{Math.floor(selectedMentor.sessions * 3.5)}</div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Students</div>
                 </div>
-                <div className="mentor-profile-stat">
-                  <div className="mentor-profile-stat-value">{Math.floor(selectedMentor.sessions * 3.5)}</div>
-                  <div className="mentor-profile-stat-label">Students</div>
+                <div className="text-center p-4 bg-secondary/50 rounded-2xl border border-white/5">
+                  <div className="text-2xl font-mono font-bold text-green-400">98%</div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Success</div>
                 </div>
               </div>
-              <div style={{ marginBottom: "1rem" }}>
-                <h4 style={{ marginBottom: "0.5rem" }}>About</h4>
-                <p style={{ color: "var(--muted-foreground)", fontSize: "0.95rem" }}>
-                  Passionate about teaching {selectedMentor.subject}. I believe in making complex concepts simple and accessible to everyone. Join my sessions to learn in a friendly, interactive environment!
+
+              <div className="space-y-3 mb-6">
+                <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">About Me</h4>
+                <p className="text-gray-300 leading-relaxed text-sm">
+                  Passionate about teaching {selectedMentor.subject}. I believe in making complex concepts simple and accessible to everyone.
+                  My goal is to help you master the fundamentals and excel in your exams.
                 </p>
               </div>
+
+              <div className="space-y-3">
+                <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Expertise</h4>
+                <div className="flex flex-wrap gap-2">
+                  {["Concept Clarity", "Exam Prep", "Assignments", "Live Coding"].map(tag => (
+                    <span key={tag} className="text-xs px-2 py-1 rounded-md bg-secondary border border-border text-gray-400">{tag}</span>
+                  ))}
+                </div>
+              </div>
+              {selectedMentor?.subject && (
+                <div className="mt-6">
+                  <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Topics & Lectures</h4>
+                  <div className="mt-3">
+                    <LectureList subjectName={selectedMentor.subject} />
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowMentorModal(false)}>
-                Close
-              </button>
-              <button 
-                className="btn btn-primary" 
+
+            <div className="modal-footer mt-6 pt-4 border-t border-border">
+              <button
+                className="btn btn-primary w-full shadow-lg shadow-primary/20"
                 onClick={() => {
+                  // Prefill create session form with mentor info and open session creation modal
                   setShowMentorModal(false);
-                  setActiveTab("sessions");
+                  setNewSessionForm(prev => ({
+                    ...prev,
+                    title: `${selectedMentor?.name} - 1:1 Session`,
+                    subject: selectedMentor?.subject || prev.subject,
+                    description: `Private session with ${selectedMentor?.name}`,
+                    schedule: 'now'
+                  }));
+                  setShowCreateSessionModal(true);
                 }}
               >
-                View Sessions
+                Book a Session
               </button>
             </div>
           </div>
@@ -954,3 +1235,5 @@ The document includes 15 practice problems and 5 real-world examples for better 
     </div>
   );
 }
+
+

@@ -11,7 +11,7 @@ type ReporterProps = {
 export default function ErrorReporter({ error, reset }: ReporterProps) {
   /* ─ instrumentation shared by every route ─ */
   const lastOverlayMsg = useRef("");
-  const pollRef = useRef<NodeJS.Timeout>();
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const inIframe = window.parent !== window;
@@ -68,7 +68,7 @@ export default function ErrorReporter({ error, reset }: ReporterProps) {
     return () => {
       window.removeEventListener("error", onError);
       window.removeEventListener("unhandledrejection", onReject);
-      pollRef.current && clearInterval(pollRef.current);
+      if (pollRef.current) clearInterval(pollRef.current);
     };
   }, []);
 
@@ -108,26 +108,22 @@ export default function ErrorReporter({ error, reset }: ReporterProps) {
             </p>
           </div>
           <div className="space-y-2">
-            {process.env.NODE_ENV === "development" && (
-              <details className="mt-4 text-left">
+              <details className="mt-4 text-left open">
                 <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
-                  Error details
+                  Error details (shown for debugging)
                 </summary>
                 <pre className="mt-2 text-xs bg-muted p-2 rounded overflow-auto">
-                  {error.message}
-                  {error.stack && (
-                    <div className="mt-2 text-muted-foreground">
+                  {error?.message}
+                  {error?.stack && (
+                    <div className="mt-2 text-muted-foreground whitespace-pre-wrap">
                       {error.stack}
                     </div>
                   )}
-                  {error.digest && (
-                    <div className="mt-2 text-muted-foreground">
-                      Digest: {error.digest}
-                    </div>
+                  {error?.digest && (
+                    <div className="mt-2 text-muted-foreground">Digest: {error.digest}</div>
                   )}
                 </pre>
               </details>
-            )}
           </div>
         </div>
       </body>
