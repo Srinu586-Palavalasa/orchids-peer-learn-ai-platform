@@ -2,7 +2,7 @@ declare module 'lucide-react' {
   import * as React from 'react';
   export type LucideProps = React.SVGProps<SVGSVGElement> & { size?: number | string };
 
-  // Common icons used across the app (minimal typing to silence TS during development)
+  // Explicit, minimal set of icons used in the codebase
   export const Video: React.FC<LucideProps>;
   export const Users: React.FC<LucideProps>;
   export const Brain: React.FC<LucideProps>;
@@ -24,37 +24,36 @@ declare module 'lucide-react' {
   export const Check: React.FC<LucideProps>;
   export const Medal: React.FC<LucideProps>;
 
-  // Additional icons seen in the codebase
-  export const Zap: React.FC<LucideProps>;
-  export const Shield: React.FC<LucideProps>;
   export const LogOut: React.FC<LucideProps>;
   export const User: React.FC<LucideProps>;
+  export const BookOpen: React.FC<LucideProps>;
   export const Calculator: React.FC<LucideProps>;
   export const Code: React.FC<LucideProps>;
   export const Atom: React.FC<LucideProps>;
-  export const BookOpen: React.FC<LucideProps>;
-  export const ChevronDownIcon: React.FC<LucideProps>;
+
+  export const ChevronDown: React.FC<LucideProps>;
+  export const ChevronLeft: React.FC<LucideProps>;
   export const ChevronRight: React.FC<LucideProps>;
+  export const ChevronUp: React.FC<LucideProps>;
   export const MoreHorizontal: React.FC<LucideProps>;
-  export const ChevronLeftIcon: React.FC<LucideProps>;
-  export const ChevronRightIcon: React.FC<LucideProps>;
-  export const MoreHorizontalIcon: React.FC<LucideProps>;
-  export const GripVerticalIcon: React.FC<LucideProps>;
-  export const ChevronUpIcon: React.FC<LucideProps>;
+
+  export const CheckIcon: React.FC<LucideProps>;
+  export const CheckAlt: React.FC<LucideProps>;
+  export const Search: React.FC<LucideProps>;
+  export const Minus: React.FC<LucideProps>;
+  export const Circle: React.FC<LucideProps>;
+
   export const ArrowLeft: React.FC<LucideProps>;
   export const ArrowRight: React.FC<LucideProps>;
-  export const CheckIcon: React.FC<LucideProps>;
-  export const SearchIcon: React.FC<LucideProps>;
-  export const CircleIcon: React.FC<LucideProps>;
-  export const XIcon: React.FC<LucideProps>;
-  export const MinusIcon: React.FC<LucideProps>;
-  export const PanelLeftIcon: React.FC<LucideProps>;
-  export const Loader2Icon: React.FC<LucideProps>;
-  export const Bot: React.FC<LucideProps>;
-  export const ZapIcon: React.FC<LucideProps>;
-  export const UsersIcon: React.FC<LucideProps>;
+  export const Loader2: React.FC<LucideProps>;
+  export const PanelLeft: React.FC<LucideProps>;
+  export const GripVerticalIcon: React.FC<LucideProps>;
 
-  // Fallback for any other named export
+  export const Bot: React.FC<LucideProps>;
+  export const Zap: React.FC<LucideProps>;
+  export const Shield: React.FC<LucideProps>;
+
+  // Fallback export for any other usage
   const _default: { [key: string]: React.FC<LucideProps> };
   export default _default;
 }
