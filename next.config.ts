@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 import path from "node:path";
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 60 // seconds
+
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
@@ -18,9 +21,6 @@ const nextConfig: NextConfig = {
   // This was causing duplicate '/vercel/path0/vercel/path0' paths during Vercel builds.
   typescript: {
     ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
   },
   // turbopack custom loaders removed to avoid executing project-local loaders
   // that require CJS-only dependencies during the build on hosting platforms.
