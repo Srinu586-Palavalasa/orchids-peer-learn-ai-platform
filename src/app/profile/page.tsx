@@ -1,5 +1,9 @@
-// export const dynamic = 'force-dynamic';
+import { cookies } from "next/headers";
+import ProfileClient from "./profile-client";
+
+export const dynamic = "force-dynamic";
 
 export default function ProfilePage() {
-  return <h1>Profile Page</h1>;
+  cookies(); // 🔥 Forces dynamic rendering
+  return <ProfileClient />;
 }
