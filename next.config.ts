@@ -16,7 +16,8 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  outputFileTracingRoot: path.resolve(__dirname, '../../'),
+  // Removed outputFileTracingRoot that pointed two levels up.
+  // This was causing duplicate '/vercel/path0/vercel/path0' paths during Vercel builds.
   typescript: {
     ignoreBuildErrors: true,
   },
