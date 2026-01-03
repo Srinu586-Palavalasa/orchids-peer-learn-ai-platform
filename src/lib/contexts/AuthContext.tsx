@@ -2,12 +2,13 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import {
-    onAuthStateChanged,
-    User,
-    GoogleAuthProvider,
-    signInWithPopup,
-    signOut
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut
 } from "firebase/auth";
+import type { User } from "firebase/auth";
+
 import { auth, db } from "../firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
@@ -16,14 +17,14 @@ interface AuthContextType {
     loading: boolean;
     signInWithGoogle: () => Promise<void>;
     logout: () => Promise<void>;
-    userProfile: any | null; // Placeholder for Firestore user profile
+    userProfile: any | null;
 }
 
 const AuthContext = createContext<AuthContextType>({
     user: null,
     loading: true,
-    signInWithGoogle: async () => { },
-    logout: async () => { },
+    signInWithGoogle: async () => {},
+    logout: async () => {},
     userProfile: null
 });
 
@@ -37,21 +38,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             setUser(currentUser);
 
             if (currentUser) {
-                // Fetch or create user profile in Firestore
                 const userRef = doc(db, "users", currentUser.uid);
                 const userSnap = await getDoc(userRef);
 
                 if (userSnap.exists()) {
                     setUserProfile(userSnap.data());
                 } else {
-                    // Create new user profile
                     const newProfile = {
                         uid: currentUser.uid,
                         name: currentUser.displayName,
                         email: currentUser.email,
                         avatar: currentUser.photoURL,
                         createdAt: serverTimestamp(),
-                        role: "student" // Default role
+                        role: "student"
                     };
                     await setDoc(userRef, newProfile);
                     setUserProfile(newProfile);
