@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth, signOut } from "@lib/firebase";
+import { auth } from "@lib/firebase";
+import { signOut } from "firebase/auth";
+
+
 import { useRouter } from "next/navigation";
 
 export default function ProfileClient() {

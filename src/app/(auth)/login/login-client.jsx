@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { auth, provider, signInWithPopup } from "@lib/firebase";
+import { auth, provider } from "@lib/firebase";
+import { signInWithPopup } from "firebase/auth";
+
+
 import { useRouter } from "next/navigation";
 
 export default function LoginClient() {
