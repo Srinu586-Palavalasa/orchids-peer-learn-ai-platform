@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 
 export default function ProfileClient() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {

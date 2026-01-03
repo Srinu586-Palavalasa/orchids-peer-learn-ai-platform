@@ -118,6 +118,7 @@ export default function Home() {
       router.push("/login");
     }
   }, [user, loading, router]);
+  
 
   // Listen for mentor selection events from subcomponents (e.g., MentorList)
   useEffect(() => {
@@ -1125,7 +1126,8 @@ The document includes 15 practice problems and 5 real-world examples for better 
             <div className="modal-body relative z-10" style={{ marginTop: "-1rem" }}>
               <div className="flex flex-col items-center">
                 <div className="w-24 h-24 rounded-full bg-secondary border-4 border-card shadow-xl flex items-center justify-center text-3xl font-bold mb-4">
-                  {selectedMentor.avatar.includes("/") ? (
+                  {selectedMentor.avatar && selectedMentor.avatar.includes("/") ? (
+
                     <img src={selectedMentor.avatar} alt="Avatar" className="w-full h-full rounded-full object-cover" />
                   ) : (
                     <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">

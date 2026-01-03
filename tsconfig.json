@@ -15,7 +15,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "react-jsx",
+    "jsx": "preserve",
     "incremental": true,
     "types": [],
     "plugins": [
@@ -24,10 +24,13 @@
       }
     ],
     "paths": {
-  "@/*": ["./src/*"],
-  "@lib/*": ["./src/lib/*"]
-}
-
+      "@/*": [
+        "./src/*"
+      ],
+      "@lib/*": [
+        "./src/lib/*"
+      ]
+    }
   },
   "include": [
     "next-env.d.ts",

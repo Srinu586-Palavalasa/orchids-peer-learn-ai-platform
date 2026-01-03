@@ -1,96 +1,103 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { auth, provider } from "@lib/firebase";
+import { useEffect, useState } from "react";
+import { auth, provider } from "@/lib/firebase";
 import { signInWithPopup } from "firebase/auth";
-
-
 import { useRouter } from "next/navigation";
+import { Zap, Sparkles, ShieldCheck } from "lucide-react";
 
 export default function LoginClient() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
-      setUser(currentUser);
-      if (currentUser) router.push("/profile");
+    const unsub = auth.onAuthStateChanged((user) => {
+      if (user) router.replace("/");
     });
-    return () => unsubscribe();
+    return () => unsub();
   }, [router]);
 
   const handleGoogleSignIn = async () => {
-    setLoading(true);
     try {
-      const result = await signInWithPopup(auth, provider);
-      setUser(result.user);
-      router.push("/profile");
-    } catch (error) {
-      console.error("Login error:", error);
+      setLoading(true);
+      await signInWithPopup(auth, provider);
+      router.replace("/");
+    } catch (err) {
+      console.error("Login error", err);
       setLoading(false);
     }
   };
+return (
+  <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f]">
+    <div className="w-[520px] rounded-2xl bg-[#0F0F16]/95 backdrop-blur-xl border border-white/10 px-10 py-8 text-center">
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-700 via-indigo-700 to-blue-700">
-      <div className="w-[380px] bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl p-8 text-center text-white">
-        <h1 className="text-4xl font-bold mb-2 tracking-wide">
-          Orchids AI
-        </h1>
-        <p className="text-white/80 mb-6">
-          Sign in to continue learning
-        </p>
-
-        <button
-          onClick={handleGoogleSignIn}
-          disabled={loading}
-          className={`w-full flex items-center justify-center gap-3 px-6 py-3 rounded-lg font-semibold transition
-            ${
-              loading
-                ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                : "bg-white text-black hover:scale-[1.02] hover:shadow-xl"
-            }`}
-        >
-          {loading ? (
-            <>
-              <span className="loader" />
-              Signing in...
-            </>
-          ) : (
-            <>
-              <img
-                src="https://www.svgrepo.com/show/475656/google-color.svg"
-                alt="Google"
-                className="w-5 h-5"
-              />
-              Sign in with Google
-            </>
-          )}
-        </button>
-
-        <p className="text-xs text-white/60 mt-6">
-          Secure Google authentication
-        </p>
+      {/* App Icon */}
+      <div className="flex justify-center mb-5">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-emerald-400 flex items-center justify-center shadow-md">
+          <svg
+            width="26"
+            height="26"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+          >
+            <path d="M12 2a10 10 0 100 20 10 10 0 000-20z" />
+            <path d="M8 12h8" />
+            <path d="M12 8v8" />
+          </svg>
+        </div>
       </div>
 
-      {/* Spinner CSS */}
-      <style jsx>{`
-        .loader {
-          width: 18px;
-          height: 18px;
-          border: 3px solid #ccc;
-          border-top: 3px solid #555;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
+      {/* Title */}
+      <h1 className="text-3xl font-semibold text-white">
+        PeerLearn
+      </h1>
+      <p className="text-gray-400 mt-2 mb-6">
+        Master any subject with peer mentorship
+      </p>
 
-        @keyframes spin {
-          to {
-            transform: rotate(360deg);
-          }
-        }
-      `}</style>
+      {/* Features */}
+      <div className="space-y-3 text-sm text-gray-300 mb-7">
+        <div className="flex items-center justify-center gap-3">
+          <span className="text-indigo-400">⚡</span>
+          <span>Instant Video Connections</span>
+        </div>
+        <div className="flex items-center justify-center gap-3">
+          <span className="text-purple-400">✨</span>
+          <span>AI-Powered Summaries</span>
+        </div>
+        <div className="flex items-center justify-center gap-3">
+          <span className="text-emerald-400">🛡️</span>
+          <span>Verified Peer Mentors</span>
+        </div>
+      </div>
+
+      {/* Google Button */}
+      <button
+        onClick={handleGoogleSignIn}
+        disabled={loading}
+        className={`w-full flex items-center justify-center gap-3 py-3 rounded-xl font-semibold transition
+          ${
+            loading
+              ? "bg-white/20 text-gray-400 cursor-not-allowed"
+              : "bg-white text-black hover:bg-gray-100"
+          }`}
+      >
+        <img
+          src="https://www.svgrepo.com/show/475656/google-color.svg"
+          alt="Google"
+          className="w-5 h-5"
+        />
+        {loading ? "Signing in..." : "Continue with Google"}
+      </button>
+
+      {/* Footer */}
+      <p className="text-[11px] text-gray-500 mt-3">
+        By continuing, you agree to our Terms of Service and Privacy Policy.
+      </p>
     </div>
-  );
+  </div>
+);
+
 }
